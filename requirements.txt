@@ -1,0 +1,8 @@
+# BERT playground backend — mirrors the week-3 notebook venv stack
+# (transformers 5.17 / torch 2.x, both already in the local pip cache)
+fastapi>=0.115,<1.0
+uvicorn>=0.30,<1.0
+transformers==5.17.0
+torch>=2.9,<3
+numpy>=1.26
+scikit-learn>=1.5

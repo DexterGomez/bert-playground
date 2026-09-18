@@ -1,0 +1,314 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>BERT playground — inside the encoder</title>
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+
+<header class="topbar">
+  <div class="brand"><span class="b">BERT</span> playground</div>
+  <div class="topbar-controls">
+    <label class="control">Model
+      <select id="model-select" autocomplete="off"></select>
+    </label>
+    <label class="control grow">Sentence
+      <input id="main-text" type="text" value="I hate transformer encoders" spellcheck="false" autocomplete="off">
+    </label>
+    <div class="preset-chips" id="preset-chips" title="preset sentences"></div>
+    <div id="status-chip" class="status-chip" title="last response">—</div>
+  </div>
+</header>
+
+<div id="error-banner" class="error-banner" hidden>
+  <span id="error-msg" class="mono"></span>
+  <button id="error-dismiss" aria-label="dismiss error">×</button>
+</div>
+
+<nav class="tabbar" id="tabbar">
+  <button class="tab-button active" data-tab="tokenize">1 · Tokenize</button>
+  <button class="tab-button" data-tab="encoder">2 · Inside the encoder</button>
+  <button class="tab-button" data-tab="attention">3 · Attention</button>
+  <button class="tab-button" data-tab="embeddings">4 · Embeddings</button>
+  <button class="tab-button" data-tab="probe">5 · Head probe</button>
+</nav>
+
+<main>
+
+  <!-- ============ TAB 1 — TOKENIZE ============ -->
+  <section id="tab-tokenize" class="tab-panel active">
+    <div class="panel-head">
+      <h2>Tokenize</h2>
+      <p class="caption">normalize → pre-split → wordpieces: everything the model actually sees is subword tokens.</p>
+      <label class="toggle"><input type="checkbox" id="tok-compare"> compare cased vs uncased</label>
+    </div>
+    <div class="empty-note" id="tok-empty">Loading…</div>
+    <div class="tab-body" id="tok-body" hidden>
+      <div class="pipeline">
+        <div class="pstep">
+          <div class="pstep-title">raw text</div>
+          <div class="pstep-body mono" id="tok-raw"></div>
+        </div>
+        <div class="parrow">→</div>
+        <div class="pstep">
+          <div class="pstep-title">normalized</div>
+          <div class="pstep-body mono" id="tok-normalized"></div>
+          <div class="pstep-note" id="tok-normalizer"></div>
+        </div>
+        <div class="parrow">→</div>
+        <div class="pstep">
+          <div class="pstep-title">pre-tokens <span class="dim">(hover for offsets)</span></div>
+          <div class="pstep-body chips" id="tok-pre"></div>
+        </div>
+        <div class="parrow">→</div>
+        <div class="pstep">
+          <div class="pstep-title">wordpiece tokens</div>
+          <div class="pstep-body chips" id="tok-wordpieces"></div>
+        </div>
+      </div>
+
+      <div id="tok-compare-view" class="compare-view" hidden></div>
+
+      <div class="block">
+        <div class="block-head">
+          <h3>Vocabulary ids</h3>
+          <span class="dim mono" id="tok-count"></span>
+        </div>
+        <div class="table-scroll">
+          <table class="token-table">
+            <thead>
+              <tr><th>#</th><th>token</th><th>id</th><th>attention_mask</th><th>offset</th></tr>
+            </thead>
+            <tbody id="tok-table-body"></tbody>
+          </table>
+        </div>
+        <div class="decoded-line">tokenizer.decode(input_ids) → <span class="mono" id="tok-decoded"></span></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ TAB 2 — INSIDE THE ENCODER ============ -->
+  <section id="tab-encoder" class="tab-panel">
+    <div class="panel-head">
+      <h2>Inside the encoder</h2>
+      <p class="caption">One forward pass, dissected. Pick a layer — 0 = embeddings, N = the last encoder layer.</p>
+    </div>
+    <div class="empty-note" id="enc-empty" hidden>No forward data yet — type a sentence above.</div>
+    <div class="tab-body" id="enc-body">
+      <div class="controls-row">
+        <label class="control">Layer
+          <input type="range" id="enc-layer" min="0" max="0" value="0" step="1">
+          <span class="mono nowrap" id="enc-layer-label">—</span>
+          <span class="dim nowrap">(0 = embeddings)</span>
+        </label>
+        <label class="toggle" title="color-scale each layer by its own range"><input type="checkbox" id="enc-perlayer" checked> scale per layer</label>
+        <label class="toggle" title="normalize each token (row) to its own max"><input type="checkbox" id="enc-pertoken"> scale per token</label>
+        <button class="btn" id="enc-full768" title="fetch full-resolution hidden state via /api/layer">Full 768 dims</button>
+        <span class="dim mono" id="enc-full-note" hidden></span>
+      </div>
+
+      <div class="enc-grid">
+        <div class="block">
+          <div class="block-head">
+            <h3>Residual stream</h3>
+            <span class="dim mono" id="enc-heatmap-sub"></span>
+          </div>
+          <div class="scroll" id="enc-heatmap-scroll"><canvas id="enc-heatmap"></canvas></div>
+          <p class="caption">Each row is one token's hidden state at the selected layer — blue = negative, red = positive. Hover any cell for the exact value.</p>
+        </div>
+        <div class="block">
+          <h3>Token norms by layer</h3>
+          <canvas id="enc-norms" class="chart"></canvas>
+          <div class="legend" id="enc-norms-legend"></div>
+          <p class="caption">L2 norm of each token's hidden state per layer — embeddings start small and uniform; depth grows and differentiates them (dashed = special tokens). The dip at the last step is the final LayerNorm rescaling, not information loss.</p>
+        </div>
+        <div class="block">
+          <div class="block-head">
+            <h3>Token–token cosine</h3>
+            <span class="dim mono" id="enc-cos-sub"></span>
+          </div>
+          <div class="scroll" id="enc-cosine-scroll"><canvas id="enc-cosine"></canvas></div>
+        </div>
+        <div class="block">
+          <h3>Mean cosine by layer</h3>
+          <canvas id="enc-meancos" class="chart"></canvas>
+          <p class="caption">tokens start dissimilar (≈0.06) and drift together (≈0.42) — anisotropy.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ TAB 3 — ATTENTION ============ -->
+  <section id="tab-attention" class="tab-panel">
+    <div class="panel-head">
+      <h2>Attention</h2>
+      <p class="caption">Every layer, every head — where each token looks.</p>
+    </div>
+    <div class="empty-note" id="att-empty" hidden>No forward data yet — type a sentence above.</div>
+    <div class="tab-body" id="att-body">
+      <div class="controls-row">
+        <label class="control">Layer
+          <input type="range" id="att-layer" min="0" max="0" value="0" step="1">
+          <span class="mono nowrap" id="att-layer-label">—</span>
+        </label>
+        <label class="control">Head
+          <input type="range" id="att-head" min="0" max="0" value="0" step="1">
+          <span class="mono nowrap" id="att-head-label">—</span>
+        </label>
+      </div>
+
+      <div class="att-grid">
+        <div class="block">
+          <div class="block-head">
+            <h3>Attention weights</h3>
+            <span class="dim mono" id="att-heatmap-sub"></span>
+          </div>
+          <div class="scroll" id="att-heatmap-scroll"><canvas id="att-heatmap"></canvas></div>
+          <p class="caption">Rows = query (the token looking), columns = key; each row sums to 1.</p>
+        </div>
+        <div class="block">
+          <h3>Attention arcs</h3>
+          <div class="scroll scroll-att" id="att-arcs-scroll"><div id="att-arcs"></div></div>
+          <p class="caption">Hover or click a token chip — arc width and brightness ∝ attention weight (top 8, weight ≥ 0.02).</p>
+        </div>
+      </div>
+
+      <div class="block">
+        <div class="block-head">
+          <h3>Head map</h3>
+          <label class="control">color by
+            <select id="att-stat">
+              <option value="to_sep">attention to [SEP]</option>
+              <option value="to_cls">attention to [CLS]</option>
+              <option value="to_prev">attention to previous token</option>
+              <option value="to_next">attention to next token</option>
+            </select>
+          </label>
+        </div>
+        <div id="att-headgrid" class="headgrid-wrap"></div>
+        <p class="caption">Bright cells = “delimiter heads” (mass dumped on [CLS]/[SEP]) or positional heads (neighbors). Click a cell to jump to that head.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ TAB 4 — EMBEDDINGS ============ -->
+  <section id="tab-embeddings" class="tab-panel">
+    <div class="panel-head">
+      <h2>Sentence embeddings</h2>
+      <p class="caption">How similar do raw encoder outputs “feel”? Pool the encoder output two ways, then compare.</p>
+    </div>
+    <div class="controls-row">
+      <div class="seg" id="emb-pool">
+        <button data-pool="cls" class="active">[CLS] pooling</button>
+        <button data-pool="mean">mean pooling</button>
+      </div>
+      <span class="dim">cos_cls = last_hidden_state[:, 0, :] · cos_mean = mean over non-special tokens</span>
+    </div>
+    <div class="emb-grid">
+      <div class="block">
+        <h3>Pair cosine</h3>
+        <label class="control stacked">A
+          <input type="text" id="emb-a" value="A man is eating food." spellcheck="false" autocomplete="off">
+        </label>
+        <label class="control stacked">B
+          <input type="text" id="emb-b" value="A man is having a meal." spellcheck="false" autocomplete="off">
+        </label>
+        <div class="big-readout">
+          <span id="emb-cos-readout" class="mono">—</span>
+          <span class="dim" id="emb-cos-sub">cosine(A, B)</span>
+        </div>
+        <p class="caption">Type any pair — near-duplicates should score high, unrelated pairs lower.</p>
+      </div>
+      <div class="block">
+        <div class="block-head">
+          <h3>Sentence bank</h3>
+          <span class="dim">one sentence per line · runs on change</span>
+        </div>
+        <textarea id="emb-bank" rows="9" spellcheck="false">A man is eating food.
+A man is having a meal.
+The chef is cooking pasta.
+A woman plays guitar on stage.
+Someone rides a bike through the park.
+Un perro corre por la playa.
+Cats sleep most of the day.
+The model finished training overnight.</textarea>
+      </div>
+      <div class="block">
+        <div class="block-head">
+          <h3>Cosine matrix</h3>
+          <span class="dim mono" id="emb-heat-sub"></span>
+          <label class="toggle"><input type="checkbox" id="emb-stretch"> stretch to min–max</label>
+        </div>
+        <div class="scroll" id="emb-heatmap-scroll"><canvas id="emb-heatmap"></canvas></div>
+      </div>
+      <div class="block">
+        <div class="block-head">
+          <h3>PCA (2d)</h3>
+          <span class="dim mono" id="emb-pca-sub"></span>
+        </div>
+        <canvas id="emb-pca" class="chart"></canvas>
+        <p class="caption">raw encoder embeddings aren't trained for similarity — week 4 swaps in embedders (BGE/E5) that are.</p>
+      </div>
+    </div>
+    <div class="empty-note" id="emb-empty" hidden></div>
+  </section>
+
+  <!-- ============ TAB 5 — HEAD PROBE ============ -->
+  <section id="tab-probe" class="tab-panel">
+    <div class="panel-head">
+      <h2>Head probe</h2>
+      <p class="caption">A fine-tuned classification head reads the [CLS] vector. Probes run on DistilBERT-uncased — the top-bar model doesn't matter here.</p>
+    </div>
+    <div class="controls-row">
+      <label class="control">Probe
+        <select id="probe-select" autocomplete="off"></select>
+      </label>
+      <label class="control grow">Text
+        <input type="text" id="probe-text" value="I hate transformer encoders" spellcheck="false" autocomplete="off">
+      </label>
+    </div>
+    <div class="empty-note" id="probe-empty" hidden>No probe data yet — type some text above.</div>
+    <div class="tab-body" id="probe-body">
+      <div class="probe-pipeline">
+        <div class="pstep pstep-grow">
+          <div class="pstep-title">last_hidden_state <span class="shape mono" id="probe-hs-shape"></span></div>
+          <canvas id="probe-hs-canvas"></canvas>
+          <div class="pstep-note">rows = tokens · schematic (96 of 768 dims)</div>
+        </div>
+        <div class="parrow">→</div>
+        <div class="pstep">
+          <div class="pstep-title">[CLS] vector <span class="shape mono" id="probe-cls-shape"></span></div>
+          <canvas id="probe-cls-canvas"></canvas>
+          <div class="pstep-note">first 16 of 768 dims</div>
+        </div>
+        <div class="parrow">×</div>
+        <div class="pstep">
+          <div class="pstep-title">× W <span class="shape mono" id="probe-w-shape"></span></div>
+          <canvas id="probe-w-canvas"></canvas>
+          <div class="pstep-note">classifier weight, first 16 of 768 cols</div>
+        </div>
+        <div class="parrow">→</div>
+        <div class="pstep pstep-grow">
+          <div class="pstep-title">logits <span class="shape mono" id="probe-logit-shape"></span></div>
+          <div id="probe-logits" class="bars logits"></div>
+        </div>
+        <div class="parrow">→</div>
+        <div class="pstep pstep-grow">
+          <div class="pstep-title">softmax</div>
+          <div id="probe-softmax" class="bars softmax"></div>
+        </div>
+      </div>
+      <div class="verdict-line" id="probe-verdict"></div>
+      <p class="caption">the encoder reads the text, the head assigns the label — Assignment 2 swaps this head.</p>
+    </div>
+  </section>
+
+</main>
+
+<div id="tooltip" class="tooltip" hidden></div>
+<noscript>This playground needs JavaScript.</noscript>
+<script type="module" src="/static/js/main.js"></script>
+</body>
+</html>
