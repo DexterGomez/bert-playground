@@ -14,8 +14,12 @@ cd weeks/03-encoders-transformers/demos/bert-playground
 .venv/bin/python app.py          # → http://127.0.0.1:8303
 ```
 
-First run loads `bert-base-cased` + `distilbert-base-uncased` (~10 s, both are
-in the local HF cache — no network needed). Forwards run on CPU: a single
+First run loads `bert-base-cased` + `bert-base-uncased` +
+`distilbert-base-uncased` + `sentence-transformers/bert-base-nli-mean-tokens`
+(~10 s, all four are in the local HF cache — no network needed). The uncased
+entry is the checkpoint behind the week-3 lecture numbers (the `it` → animal
+example: layer 4 head 11 = sliders 3/10 in the attention tab). Forwards run on
+CPU: a single
 sentence is ~0.5 s cold, instant after (results are cached per model+text).
 
 The emotion probe loads from
@@ -39,6 +43,16 @@ unavailable. The SST-2 probe uses the cached HF model. Rebuild the venv with
    `[SEP]` collapses at layer 11 then rebounds — special tokens are weird.
    Bottom: inter-token cosine per layer — mean cosine drifts ≈0.06 → ≈0.42:
    **anisotropy**, tokens become more similar, not less.
+   **SBERT model option:** the third dropdown entry is the SAME 12-layer BERT
+   fine-tuned by Sentence-BERT (NLI, mean pooling) — an amber note under the
+   tab caption flags it. The class-visible delta: the mid layers go flat
+   (mean cosine plateaus ≈0.24–0.34, colors barely change layer to layer),
+   then L11–L12 collapse the cone *harder* than base BERT ever does (≈0.86–0.90
+   at L12). Story: the SBERT loss only ever sees the mean-pooled sentence
+   vector, so it reshapes exactly the pooled end — sentence-level uniformity
+   is bought WITH token-level anisotropy. Warning the note carries: SBERT
+   exports the mean of these token vectors, not the token vectors — don't use
+   it for token-level work.
 3. **Attention** — layer + head sliders; the n×n matrix (rows = the token
    looking, cols = where it looks; each row sums to 1), BertViz-style arcs
    (hover/click a token chip), and the layer×head grid colored by attention

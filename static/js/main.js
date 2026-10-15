@@ -73,13 +73,14 @@ const els = {
   tokTableBody: $('tok-table-body'), tokCount: $('tok-count'), tokDecoded: $('tok-decoded'),
 
   encBody: $('enc-body'), encEmpty: $('enc-empty'),
+  encModelNote: $('enc-model-note'),
   encLayer: $('enc-layer'), encLayerLabel: $('enc-layer-label'),
   encPerLayer: $('enc-perlayer'), encPerToken: $('enc-pertoken'),
   encFull768: $('enc-full768'), encFullNote: $('enc-full-note'),
   encHeatmap: $('enc-heatmap'), encHeatmapScroll: $('enc-heatmap-scroll'), encHeatmapSub: $('enc-heatmap-sub'),
   encNorms: $('enc-norms'), encNormsLegend: $('enc-norms-legend'),
   encCosine: $('enc-cosine'), encCosineScroll: $('enc-cosine-scroll'), encCosSub: $('enc-cos-sub'),
-  encMeanCos: $('enc-meancos'),
+  encMeanCos: $('enc-meancos'), meanCosCaption: $('meancos-caption'),
 
   attBody: $('att-body'), attEmpty: $('att-empty'),
   attLayer: $('att-layer'), attLayerLabel: $('att-layer-label'),
@@ -194,6 +195,13 @@ function otherModelId() {
   return other ? other.id : (state.model === 'distilbert-base-uncased' ? 'bert-base-cased' : 'distilbert-base-uncased');
 }
 
+function updateModelNote() {
+  const m = ((state.meta && state.meta.models) || []).find((x) => x.id === state.model);
+  const note = m && m.note;
+  els.encModelNote.hidden = !note;
+  if (note) els.encModelNote.textContent = note;
+}
+
 async function loadMeta() {
   const r = await run('meta', () => api.meta());
   if (r.stale) return false;
@@ -215,6 +223,7 @@ async function loadMeta() {
   state.model = models.some((m) => m.id === r.data.default_model)
     ? r.data.default_model : (models[0] && models[0].id);
   if (state.model) els.modelSelect.value = state.model;
+  updateModelNote();
 
   els.probeSelect.innerHTML = '';
   for (const p of r.data.probes || []) {
@@ -567,6 +576,9 @@ function drawMeanCos() {
   if (!f || !f.mean_cosine || !f.mean_cosine.length) return;
   let mx = 0.1;
   for (const v of f.mean_cosine) if (v > mx) mx = v;
+  const mc = f.mean_cosine;
+  els.meanCosCaption.textContent =
+    `tokens start dissimilar (≈${mc[0].toFixed(2)}) and drift together (≈${mc[mc.length - 1].toFixed(2)}) — anisotropy.`;
   drawLineChart(els.encMeanCos, els.encMeanCos.parentElement, {
     series: [{ values: f.mean_cosine, color: '#ffb454', width: 2 }],
     yMin: 0,
@@ -770,6 +782,7 @@ function wireEvents() {
     state.model = els.modelSelect.value;
     state.full768 = null;
     state.compare = null;
+    updateModelNote();
     refreshTokenize();
     doForward();
     if (state.visited.embeddings) { fetchAB(); fetchBank(); }

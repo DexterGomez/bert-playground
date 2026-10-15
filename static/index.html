@@ -94,6 +94,7 @@
     <div class="panel-head">
       <h2>Inside the encoder</h2>
       <p class="caption">One forward pass, dissected. Pick a layer — 0 = embeddings, N = the last encoder layer.</p>
+      <p class="caption model-note" id="enc-model-note" hidden></p>
     </div>
     <div class="empty-note" id="enc-empty" hidden>No forward data yet — type a sentence above.</div>
     <div class="tab-body" id="enc-body">
@@ -134,7 +135,7 @@
         <div class="block">
           <h3>Mean cosine by layer</h3>
           <canvas id="enc-meancos" class="chart"></canvas>
-          <p class="caption">tokens start dissimilar (≈0.06) and drift together (≈0.42) — anisotropy.</p>
+          <p class="caption" id="meancos-caption">tokens start dissimilar (≈0.06) and drift together (≈0.42) — anisotropy.</p>
         </div>
       </div>
     </div>

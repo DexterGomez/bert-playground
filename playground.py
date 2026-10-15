@@ -68,8 +68,21 @@ SST2_ID = "distilbert-base-uncased-finetuned-sst-2-english"
 MODELS = [
     {"id": "bert-base-cased", "label": "BERT-base · cased · 12 layers",
      "num_layers": 12, "num_heads": 12, "dim": 768},
+    {"id": "bert-base-uncased", "label": "BERT-base · uncased · 12 layers",
+     "num_layers": 12, "num_heads": 12, "dim": 768,
+     "note": "The checkpoint behind the lecture's attention numbers: lowercases "
+             "and strips accents, then 'it' → animal at layer 4 head 11 "
+             "(sliders 3 / 10, counts from 0)."},
     {"id": "distilbert-base-uncased", "label": "DistilBERT · uncased · 6 layers",
      "num_layers": 6, "num_heads": 12, "dim": 768},
+    {"id": "sentence-transformers/bert-base-nli-mean-tokens",
+     "label": "SBERT (NLI) · uncased · 12 layers",
+     "num_layers": 12, "num_heads": 12, "dim": 768,
+     "note": "The SAME 12-layer BERT, fine-tuned by Sentence-BERT for sentence "
+             "embeddings (NLI, mean pooling). Watch the strip: the mid layers "
+             "stay flat, then L11–L12 collapse every token toward one shared "
+             "direction (mean cosine → ~0.86). SBERT exports the mean of these "
+             "vectors — not the token vectors themselves."},
 ]
 MODEL_IDS = frozenset(m["id"] for m in MODELS)
 DEFAULT_MODEL = MODELS[0]["id"]
